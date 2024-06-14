@@ -107,10 +107,8 @@ async def display_queue(ctx):
 async def skip(ctx):
     vc = ctx.voice_client
     if vc and vc.is_playing():
-        vc.stop()
-        queue.pop(0)
-        await ctx.send("Skipping current audio.")
-        await play_next(vc, ctx)
+        vc.stop() # stop vc triggers inner while loop of play to break
+        await ctx.send(f"Skipping {queue[0][0]}.")
     else:
         await ctx.send("Nothing to skip.") # does this ever trigger??
 
