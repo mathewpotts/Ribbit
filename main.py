@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import discord
 import asyncio
+import subprocess
+import json
 from discord.ext import commands
 from pytube import YouTube, Playlist
 
@@ -16,31 +18,23 @@ bot = commands.Bot(command_prefix='$', intents=intents)
 queue = []
 
 async def preload_songs(ctx, youtube_url):
-    print("Im preloading songs...")
-    ffmpeg_options = {
-        'options': '-vn',
-        'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5'
-    }
+    print("Preloading songs...")
     try:
-        if 'playlist' in youtube_url:
-            pl = Playlist(youtube_url)
-            titles = [video.title for video in pl.videos]
-            video_urls = [video.streams.filter(progressive=True, file_extension='mp4').first().url for video in pl.videos] # source urls
-            for i, video_url in enumerate(video_urls):
-                audio_source = discord.FFmpegPCMAudio(video_url, **ffmpeg_options)
-                queue.append([titles[i], video_url, audio_source])
-            await ctx.send(f'Adding {len(video_urls)} to queue.')
+        result = subprocess.run(['python', 'preload.py', youtube_url], capture_output=True, text=True) # my windows is aliased to python... not python3
+        print(result)
+        if result.returncode == 0:
+            songs = json.loads(result.stdout)
+            for song in songs:
+                title, video_url = song
+                audio_source = discord.FFmpegPCMAudio(video_url, options='-vn', before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5')
+                queue.append([title, video_url, audio_source])
+            await ctx.send(f'Adding {len(songs)} songs to the queue.')
         else:
-            yt = YouTube(youtube_url)
-            title = yt.title
-            video_url = yt.streams.filter(progressive=True, file_extension='mp4').first().url # source url
-            audio_source = discord.FFmpegPCMAudio(video_url, **ffmpeg_options)
-            queue.append([title, video_url, audio_source])
-            if len(queue) > 1: # if there is stuff in the queue then report to user that it is being added
-                await ctx.send(f'Adding {title} to queue.')
+            error_message = json.loads(result.stdout).get('error', 'Unknown error occurred')
+            await ctx.send(f"Failed to preload songs: {error_message}")
     except Exception as e:
-        await ctx.send(f"Failed to preload song(s): {e}")
-        print(f"Error preloading song(s): {e}")
+        await ctx.send(f"Failed to preload songs: {e}")
+        print(f"Error preloading songs: {e}")
 
 @bot.event
 async def on_ready():
@@ -65,26 +59,25 @@ async def play(ctx, youtube_url):
     voice_channel = ctx.author.voice.channel
     print('Author:',ctx.author,', Channel:', voice_channel,'URL:', youtube_url)
 
-    #### CHECKS ####
     # Check if Author is in  channel
     if not voice_channel:
         await ctx.send(f'{ctx.author} you need to be in a voice channel before using me to play audio.')
-        return 1
+        return
     # Check if YouTube link
     if 'youtube' not in youtube_url:
         await ctx.send(f'{youtube_url} is not from YouTube. I can only play YouTube videos.')
-        return 1
+        return
+
     #### Preload songs to queue ####
+    await preload_songs(ctx, youtube_url)
+
     # Check if Bot is already in voice channel
     vc = ctx.voice_client
     if not vc:
-    	await preload_songs(ctx, youtube_url)
     	vc = await voice_channel.connect()
     else:
         print("I'm already in voice channel")
-        await preload_songs(ctx, youtube_url)
-        return 0
-    #### END CHECKS ####
+        return
 
     await play_next(vc, ctx)
 
