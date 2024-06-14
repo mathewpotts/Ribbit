@@ -19,8 +19,10 @@ queue = []
 
 async def preload_songs(ctx, youtube_url):
     print("Preloading songs...")
+    if 'playlist' in youtube_url:
+        await ctx.send(f'Depending on the size of your playlist it will take me a while to sort through all the songs. I am slow at this...')
     try:
-        result = subprocess.run(['python', 'preload.py', youtube_url], capture_output=True, text=True) # my windows is aliased to python... not python3
+        result = subprocess.run(['python', 'preload.py', youtube_url], capture_output=True, text=True)
         print(result)
         if result.returncode == 0:
             songs = json.loads(result.stdout)
@@ -53,7 +55,7 @@ async def on_voice_state_update(member, before, after):
     if len(voice_channel.members) == 1 and voice_channel.members[0] == bot.user:
         await voice_client.disconnect()
 
-@bot.command(name='play', help='Post YouTube link.') # pauses playing audio when adding things to queue
+@bot.command(name='play', help='Play and queue YouTube links. Example: $play <YouTube URL>')
 async def play(ctx, youtube_url):
     # Grab author voice channel and print it to log
     voice_channel = ctx.author.voice.channel
@@ -84,7 +86,7 @@ async def play(ctx, youtube_url):
 async def play_next(vc, ctx):
     while queue:
         title, video_url, audio_source = queue[0]
-        vc.play(audio_source, after=lambda e: print(f'Player error: {e}') if e else None)#asyncio.run_coroutine_threadsafe(play_next(vc, ctx), bot.loop)) # caues spamming issues??
+        vc.play(audio_source, after=lambda e: print(f'Player error: {e}') if e else None)
         await ctx.send(f"Now playing: {title}.")
         while vc.is_playing():
             await asyncio.sleep(1)
