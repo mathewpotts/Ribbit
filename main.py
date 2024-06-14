@@ -89,7 +89,10 @@ async def play_next(vc, ctx):
         while vc.is_playing():
             await asyncio.sleep(1)
         await ctx.send(f"Finished playing: {title}.")
-        queue.pop(0)
+        try:
+            queue.pop(0)
+        except Exception as e:
+            print(f"{e}")
     await vc.disconnect()
 
 @bot.command(name='queue', help='Display the current queue.') # displays links need to change to titles
