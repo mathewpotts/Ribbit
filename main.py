@@ -6,6 +6,7 @@ import json
 from discord.ext import commands
 from pytube import YouTube, Playlist
 
+# Read token from file
 with open('TOKEN.txt','r') as f:
     TOKEN = f.read()
 
@@ -22,10 +23,10 @@ async def preload_songs(ctx, youtube_url):
     if 'playlist' in youtube_url:
         await ctx.send(f'Depending on the size of your playlist it will take me a while to sort through all the songs. I am slow at this...')
     try:
-        result = subprocess.run(['python', 'preload.py', youtube_url], capture_output=True, text=True)
-        print(result)
+        process = await asyncio.create_subprocess_exec('python', 'preload.py', youtube_url, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = await process.communicate()
         if result.returncode == 0:
-            songs = json.loads(result.stdout)
+            songs = json.loads(stdout.decode())
             for song in songs:
                 title, video_url = song
                 audio_source = discord.FFmpegPCMAudio(video_url, options='-vn', before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5')
