@@ -33,7 +33,7 @@ async def preload_songs(ctx, youtube_url):
                 queue.append([title, video_url, audio_source])
             await ctx.send(f'Adding {len(songs)} songs to the queue.')
         else:
-            error_message = json.loads(result.stdout).get('error', 'Unknown error occurred')
+            error_message = json.loads(stdout.decode()).get('error', 'Unknown error occurred')
             await ctx.send(f"Failed to preload songs: {error_message}")
     except Exception as e:
         await ctx.send(f"Failed to preload songs: {e}")
