@@ -25,7 +25,7 @@ async def preload_songs(ctx, youtube_url):
     try:
         process = await asyncio.create_subprocess_exec('python', 'preload.py', youtube_url, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = await process.communicate()
-        if result.returncode == 0:
+        if process.returncode == 0:
             songs = json.loads(stdout.decode())
             for song in songs:
                 title, video_url = song
@@ -33,7 +33,7 @@ async def preload_songs(ctx, youtube_url):
                 queue.append([title, video_url, audio_source])
             await ctx.send(f'Adding {len(songs)} songs to the queue.')
         else:
-            error_message = json.loads(stdout.decode()).get('error', 'Unknown error occurred')
+            error_message = json.loads(stderr.decode()).get('error', 'Unknown error occurred')
             await ctx.send(f"Failed to preload songs: {error_message}")
     except Exception as e:
         await ctx.send(f"Failed to preload songs: {e}")
