@@ -7,14 +7,14 @@ import logging
 from discord.ext import commands
 from pytube import YouTube, Playlist
 
-logging.basicConfig(filename='ribbit.log',
+logging.basicConfig(filename='/home/potts/ribbit.log',
                     filemode='w',
                     format='%(asctime)s %(levelname)s: %(message)s',
                     datefmt='%m/%d/%Y %I:%M:%S %p',
                     level=logging.DEBUG)
 
 # Read token from file
-with open('TOKEN.txt','r') as f:
+with open('/home/potts/git/Ribbit/TOKEN.txt','r') as f:
     TOKEN = f.read()
 
 # Setting command prefix and intents
@@ -29,10 +29,14 @@ async def preload_songs(ctx, youtube_url):
     logging.info(f'Prloading {youtube_url}.')
     if 'playlist' in youtube_url:
         await ctx.send(f'Depending on the size of your playlist it will take me a while to sort through all the songs. I am slow at this...')
+    else:
+        await ctx.send(f'Preloading song...')
+        logging.info(f'Preloading song...')
     try:
-        process = await asyncio.create_subprocess_exec('python', 'preload.py', youtube_url, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = await asyncio.create_subprocess_exec('python', '/home/potts/git/Ribbit/preload.py', youtube_url, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = await process.communicate()
-        logging.debug(f'Preload output:\n{stdout.decode()}')
+        logging.debug(f'Preloaded output:\n{stdout.decode()}')
+        logging.debug(f'Process Return Code: {process.returncode}')
         if process.returncode == 0:
             songs = json.loads(stdout.decode())
             for song in songs:
@@ -41,12 +45,14 @@ async def preload_songs(ctx, youtube_url):
                 queue.append([title, audio_source])
             await ctx.send(f'Adding {len(songs)} songs to the queue.')
         else:
-            error_message = json.loads(stderr.decode()).get('error', 'Unknown error occurred')
-            logging.error(f'Async process returned non-zero: {error_message}')
-            await ctx.send(f"Failed to preload songs: {error_message}")
+            error_message = stderr.decode()
+            error_user    = error_message.split('\n')[-2].split(':')[-1] # Print the last line of the exeception
+            logging.error(f'Async process returned non-zero:\n{error_message}')
+            await ctx.send(f"Failed to preload songs: {error_user}")
     except Exception as e:
         await ctx.send(f"Failed to preload songs: {e}")
         logging.error(f"Error preloading songs: {e}")
+
 
 @bot.event
 async def on_ready():

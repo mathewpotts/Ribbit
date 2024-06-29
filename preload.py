@@ -19,7 +19,7 @@ def preload_songs(youtube_url):
             queue.append([title, video_url])
     except Exception as e:
         print(json.dumps({"error": str(e)}))
-        sys.exit(1)
+        raise
     print(json.dumps(queue))
 
 if __name__ == "__main__":
