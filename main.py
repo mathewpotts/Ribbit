@@ -42,6 +42,7 @@ async def preload_songs(ctx, youtube_url):
             for song in songs:
                 title, video_url = song
                 audio_source = discord.FFmpegPCMAudio(video_url, options='-vn', before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5')
+                audio_source.read() # read the audio binary output (3-4 seconds), prevents audio from playing a little too fast in the beginning
                 queue.append([title, audio_source])
             await ctx.send(f'Adding {len(songs)} songs to the queue.')
         else:
