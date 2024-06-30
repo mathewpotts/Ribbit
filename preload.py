@@ -3,6 +3,12 @@ import sys
 import json
 from pytube import YouTube, Playlist
 
+# Fixes age restricted errors. Actually age restricted videos will still not work. 
+from pytube.innertube import _default_clients
+_default_clients["ANDROID"]["context"]["client"]["clientVersion"] = "19.08.35"
+_default_clients["ANDROID_MUSIC"] = _default_clients["ANDROID"]
+
+
 def preload_songs(youtube_url):
     queue = []
     try:
