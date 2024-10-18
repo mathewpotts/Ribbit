@@ -26,7 +26,7 @@ bot = commands.Bot(command_prefix='$', intents=intents)
 queue = []
 
 async def preload_songs(ctx, youtube_url):
-    logging.info(f'Prloading {youtube_url}.')
+    logging.info(f'Preloading {youtube_url}.')
     if 'playlist' in youtube_url:
         await ctx.send(f'Depending on the size of your playlist it will take me a while to sort through all the songs. I am slow at this...')
     else:
