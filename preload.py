@@ -13,7 +13,7 @@ def preload_songs(youtube_url):
     queue = []
     try:
         if 'playlist' in youtube_url:
-            pl = Playlist(youtube_url, use_oauth=True)
+            pl = Playlist(youtube_url)
             titles = [video.title for video in pl.videos]
             video_urls = [video.streams.filter(progressive=True, file_extension='mp4').first().url for video in pl.videos]
             for i, video_url in enumerate(video_urls):

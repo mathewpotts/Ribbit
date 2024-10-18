@@ -105,13 +105,29 @@ async def play(ctx, youtube_url):
 
     await play_next(vc, ctx)
 
+@bot.command(name='pause', help='Pause YouTube playback.')
+async def pause(ctx):
+    if ctx.voice_client.is_playing():
+        ctx.voice_client.pause()
+        await ctx.send("Playback paused.")
+    else:
+        await ctx.send("Nothing is playing right now.")
+
+@bot.command(name='resume', help='Resume YouTube playback.')
+async def resume(ctx):
+    if ctx.voice_client.is_paused():
+        ctx.voice_client.resume()
+        await ctx.send("Playback resumed.")
+    else:
+        await ctx.send("Playback is not paused.")
+
 async def play_next(vc, ctx):
     while queue:
         title, audio_source = queue[0]
         vc.play(audio_source, after=lambda e: logging.error(f'Player error: {e}') if e else None)
         await ctx.send(f"Now playing: {title}.")
         logging.info(f"Now playing: {title}.")
-        while vc.is_playing():
+        while vc.is_playing() or vc.is_paused():
             await asyncio.sleep(1)
         await ctx.send(f"Finished playing: {title}.")
         logging.info(f"Finished playing: {title}.")
