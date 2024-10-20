@@ -39,7 +39,7 @@ async def preload_songs(ctx, youtube_url):
         logging.debug(f'Process Return Code: {process.returncode}')
         if process.returncode == 0:
             songs = json.loads(stdout.decode())
-            for song in songs:
+            for song in songs: ##### need to treat this differently with playlists; maybe have something where is loads batches of songs into queue, queueing is fine as far as speed...
                 title, video_url = song
                 audio_source = discord.FFmpegPCMAudio(video_url, options='-vn', before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5')
                 audio_source.read() # read the audio binary output (3-4 seconds), prevents audio from playing a little too fast in the beginning
