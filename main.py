@@ -4,6 +4,7 @@ import asyncio
 import subprocess
 import json
 import logging
+from time import sleep
 from discord.ext import commands
 from pytube import YouTube, Playlist
 
@@ -22,38 +23,61 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='$', intents=intents)
 
-# Define a list for queueing videos
+# Define a list for queueing videos as Global variable
 queue = []
+
+# Define a list of background tasks
+bg_tasks = []
+
+# Define Batch Size for Playlist loading
+BATCH = 1
+BATCH_WAIT = 5
 
 async def preload_songs(ctx, youtube_url):
     logging.info(f'Preloading {youtube_url}.')
+    processes = {}
+    stdout = {}
+    stderr = {}
     if 'playlist' in youtube_url:
-        await ctx.send(f'Depending on the size of your playlist it will take me a while to sort through all the songs. I am slow at this...')
+        await ctx.send(f'Preloading Playlist. I will add these songs to the queue {BATCH} song at a time to a total queue size of {BATCH_WAIT}. Then I will wait for more queue space to add more songs.')
+        pl = list(Playlist(youtube_url))
+        logging.debug(pl)
+        while pl:
+            if len(queue) < BATCH_WAIT:
+                batch = pl[:BATCH]  # take a batch from the playlist
+                pl = pl[BATCH:]     # removed processed items from the playlist
+                processes = {
+                    i: await asyncio.create_subprocess_exec('python','/home/potts/git/Ribbit/preload.py', url, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    for i, url in enumerate(batch)
+                }
+                logging.debug(processes)
+                songs = []
+                for i,v in processes.items():
+                    stdout[i],stderr[i] = await processes[i].communicate()
+                    if processes[i].returncode == 0:
+                        songs.append(json.loads(stdout[i].decode())[0])
+                await add_to_queue(ctx, songs)
+            else:
+                #logging.debug(f'At BATCH_WAIT limit! Current length of the queue is {len(queue)}.')
+                await asyncio.sleep(60) 
     else:
-        await ctx.send(f'Preloading song...')
-        logging.info(f'Preloading song...')
-    try:
-        process = await asyncio.create_subprocess_exec('python', '/home/potts/git/Ribbit/preload.py', youtube_url, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdout, stderr = await process.communicate()
-        logging.debug(f'Preloaded output:\n{stdout.decode()}')
-        logging.debug(f'Process Return Code: {process.returncode}')
-        if process.returncode == 0:
-            songs = json.loads(stdout.decode())
-            for song in songs: ##### need to treat this differently with playlists; maybe have something where is loads batches of songs into queue, queueing is fine as far as speed...
-                title, video_url = song
-                audio_source = discord.FFmpegPCMAudio(video_url, options='-vn', before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5')
-                audio_source.read() # read the audio binary output (3-4 seconds), prevents audio from playing a little too fast in the beginning
-                queue.append([title, audio_source])
-            await ctx.send(f'Adding {len(songs)} songs to the queue.')
-        else:
-            error_message = stderr.decode()
-            error_user    = error_message.split('\n')[-2].split(':')[-1] # Print the last line of the exeception
-            logging.error(f'Async process returned non-zero:\n{error_message}')
-            await ctx.send(f"Failed to preload songs: {error_user}")
-    except Exception as e:
-        await ctx.send(f"Failed to preload songs: {e}")
-        logging.error(f"Error preloading songs: {e}")
+        await ctx.send(f'Preloading song. Please wait for me to connect to VC.')
+        logging.info(f'Preloading song. Please wait for me to connect to VC.')
+        processes[0] = await asyncio.create_subprocess_exec('python', '/home/potts/git/Ribbit/preload.py', youtube_url, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout[0], stderr[0] = await processes[0].communicate()
+        logging.debug(f'Preloaded output:\n{stdout[0].decode()}')
+        logging.debug(f'Process Return Code: {processes[0].returncode}')
+        if processes[0].returncode == 0:
+            songs = json.loads(stdout[0].decode())
+            await add_to_queue(ctx, songs)
 
+async def add_to_queue(ctx, songs):
+    for song in songs: 
+        title, video_url, length = song
+        audio_source = discord.FFmpegPCMAudio(video_url, options='-vn', before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5')
+        audio_source.read() # read the audio binary output (3-4 seconds), prevents audio from playing a little too fast in the beginning
+        queue.append([title, audio_source, length])
+    await ctx.send(f'Adding {len(songs)} songs to the queue.')
 
 @bot.event
 async def on_ready():
@@ -93,11 +117,14 @@ async def play(ctx, youtube_url):
     logging.debug(f'Play command Author: {ctx.author}, Channel: {voice_channel}, URL: {youtube_url}')
 
     #### Preload songs to queue ####
-    await preload_songs(ctx, youtube_url)
+    proc = bot.loop.create_task(preload_songs(ctx, youtube_url))
+    bg_tasks.append(proc)
 
     # Check if Bot is already in voice channel
     vc = ctx.voice_client
     if not vc:
+        while len(queue) == 0:
+            await asyncio.sleep(1)
         vc = await voice_channel.connect()
         logging.info('Entering VC.')
     else:
@@ -123,7 +150,7 @@ async def resume(ctx):
 
 async def play_next(vc, ctx):
     while queue:
-        title, audio_source = queue[0]
+        title, audio_source, length = queue[0]
         vc.play(audio_source, after=lambda e: logging.error(f'Player error: {e}') if e else None)
         await ctx.send(f"Now playing: {title}.")
         logging.info(f"Now playing: {title}.")
@@ -160,11 +187,14 @@ async def skip(ctx):
 
 @bot.command(name='stop', help='Stops playing audio, clears the queue, and disconnects Bot from the voice channel.') # displays error but seems to work regardless
 async def stop(ctx):
+    ### need to find a way to kill the background tasks
     logging.debug(f'Stop command Author: {ctx.author}')
     vc = ctx.voice_client
     if vc:
         vc.stop()
         queue.clear()
+        for task in bg_tasks:
+            task.cancel()
         await vc.disconnect()
         await ctx.send("Stopped playing audio, cleared the queue, and disconnected from the voice channel.")
         logging.info("Stopped playing audio, cleared the queue, and disconnected from the voice channel.")
