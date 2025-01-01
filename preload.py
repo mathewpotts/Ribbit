@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import json
-from pytube import YouTube
+from pytubefix import YouTube
 import logging
 
 logging.basicConfig(filename='/home/potts/ribbit.log',
@@ -18,8 +18,8 @@ _default_clients["ANDROID_MUSIC"] = _default_clients["ANDROID"]
 
 def preload_songs(youtube_url):
     queue = []
-    logging.info(f"In preload {youtube_url}")    
-    
+    logging.info(f"In preload {youtube_url}")
+
     try:
         yt = YouTube(youtube_url, use_oauth=True)
         title = yt.title

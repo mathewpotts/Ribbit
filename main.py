@@ -6,7 +6,7 @@ import json
 import logging
 from time import sleep
 from discord.ext import commands
-from pytube import YouTube, Playlist
+from pytubefix import YouTube, Playlist, Search
 
 logging.basicConfig(filename='/home/potts/ribbit.log',
                     filemode='w',
@@ -26,12 +26,58 @@ bot = commands.Bot(command_prefix='$', intents=intents)
 # Define a list for queueing videos as Global variable
 queue = []
 
-# Define a list of background tasks
+# Define a list of background tasks globally so they can be stopped if needed
 bg_tasks = []
 
 # Define Batch Size for Playlist loading
 BATCH = 1
 BATCH_WAIT = 5
+
+
+async def search_yt(ctx, search):
+    # Search YouTube using search string
+    results =  [video for video in Search(search).videos]
+
+    # Create a list of rows
+    rows = []
+    buttons = []
+    for i, vid in enumerate(results):
+        button = Button(label=f"{i + 1}.", style=discord.ButtonStyle.primary, custom_id=vid.watch_url)
+        row = (f'{i + 1}.', f'{vid.title}', f'{vid.length/60} min')
+        rows.append(row)
+        buttons.append(button)
+
+    # Define header and sep
+    header = ['Result', 'Title', 'Length']
+    colmax = {}
+    for i, col in enumerate(header):
+        colmax[col] = max(len(row[i]) for row in rows)
+    header = f"{header[0].ljust(colmax[header[0]])} | {header[1].ljust(colmax[header[1]])} | {header[2].ljust(colmax[header[2]])}"
+    sep = '-' * (sum(colmax.values()) + 6)
+
+    # Justify table rows
+    for i, r in enumerate(rows):
+        rows[i] = f"{r[0].ljust(colmax[header[0]])} | {r[1].ljust(colmax[header[1]])} | {r[2].ljust(colmax[header[2]])}"
+
+    # Create a view to hold the buttons
+    view = View()
+    for button in buttons:
+        view.add_item(button)
+
+    # Send a message with the buttons
+    table = f"{header}\n{sep}\n{'\n'.join(rows)}"
+    await ctx.send(f"Click a button to play a video!\n{table}", view=view)
+
+# Button interaction handler
+@bot.event
+async def on_interaction(interaction):
+    if interaction.type == discord.InteractionType.component:
+        # Get the URL from the button's custom_id
+        url = interaction.data['custom_id']
+
+        # Call the preload_songs function, passing the URL
+        await preload_songs(interaction.user, url)  # Pass the URL to the play function
+
 
 async def preload_songs(ctx, youtube_url):
     logging.info(f'Preloading {youtube_url}.')
@@ -59,7 +105,7 @@ async def preload_songs(ctx, youtube_url):
                 await add_to_queue(ctx, songs)
             else:
                 #logging.debug(f'At BATCH_WAIT limit! Current length of the queue is {len(queue)}.')
-                await asyncio.sleep(60) 
+                await asyncio.sleep(60)
     else:
         await ctx.send(f'Preloading song. Please wait for me to connect to VC.')
         logging.info(f'Preloading song. Please wait for me to connect to VC.')
@@ -72,7 +118,7 @@ async def preload_songs(ctx, youtube_url):
             await add_to_queue(ctx, songs)
 
 async def add_to_queue(ctx, songs):
-    for song in songs: 
+    for song in songs:
         title, video_url, length = song
         audio_source = discord.FFmpegPCMAudio(video_url, options='-vn', before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5')
         audio_source.read() # read the audio binary output (3-4 seconds), prevents audio from playing a little too fast in the beginning
@@ -109,8 +155,12 @@ async def play(ctx, youtube_url):
 
     # Check if YouTube link
     if 'youtube' not in youtube_url:
-        await ctx.send(f'{youtube_url} is not from YouTube. I can only play YouTube videos.')
-        logging.info(f'{youtube_url} is not from YouTube. I can only play YouTube videos.')
+        logging.debug(f'Play command Author: {ctx.author}, Channel: {voice_channel}, Search: "{youtube_url}"')
+        await ctx.send(f'Searching YouTube for "{youtube_url}"...')
+        logging.info(f'Searching YouTube for "{youtube_url}"...')
+
+        # Search YouTube for videos
+        await search_yt(ctx, youtube_url)
         return
 
     # Grab author voice channel and print it to log
