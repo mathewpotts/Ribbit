@@ -6,6 +6,7 @@ import json
 import logging
 from time import sleep
 from discord.ext import commands
+from discord.ui import Button, View
 from pytubefix import YouTube, Playlist, Search
 
 logging.basicConfig(filename='/home/potts/ribbit.log',
@@ -41,23 +42,29 @@ async def search_yt(ctx, search):
     # Create a list of rows
     rows = []
     buttons = []
-    for i, vid in enumerate(results):
+    for i, vid in enumerate(results[:5]):
         button = Button(label=f"{i + 1}.", style=discord.ButtonStyle.primary, custom_id=vid.watch_url)
-        row = (f'{i + 1}.', f'{vid.title}', f'{vid.length/60} min')
+        row = (f'{i + 1}.', f'{vid.title}', f'{vid.length/60:.2f} min')
         rows.append(row)
         buttons.append(button)
 
     # Define header and sep
     header = ['Result', 'Title', 'Length']
-    colmax = {}
-    for i, col in enumerate(header):
-        colmax[col] = max(len(row[i]) for row in rows)
-    header = f"{header[0].ljust(colmax[header[0]])} | {header[1].ljust(colmax[header[1]])} | {header[2].ljust(colmax[header[2]])}"
-    sep = '-' * (sum(colmax.values()) + 6)
 
-    # Justify table rows
-    for i, r in enumerate(rows):
-        rows[i] = f"{r[0].ljust(colmax[header[0]])} | {r[1].ljust(colmax[header[1]])} | {r[2].ljust(colmax[header[2]])}"
+    # Calculate column widths
+    col_widths = []
+    for i in range(len(header)):
+        # For each column, find the maximum length between the header and the rows
+        max_len = max(len(header[i]), max(len(row[i]) for row in rows))
+        col_widths.append(max_len)
+        
+    # Format the table
+    header_row = " | ".join(header[i].ljust(col_widths[i]) for i in range(len(header)))
+    formatted_rows = "\n".join(
+        " | ".join(row[i].ljust(col_widths[i]) for i in range(len(header))) for row in rows
+    )
+    #logging.debug(formatted_rows)
+    separator = "-" * (sum(col_widths) + len(header) * 3 - 1)
 
     # Create a view to hold the buttons
     view = View()
@@ -65,18 +72,25 @@ async def search_yt(ctx, search):
         view.add_item(button)
 
     # Send a message with the buttons
-    table = f"{header}\n{sep}\n{'\n'.join(rows)}"
-    await ctx.send(f"Click a button to play a video!\n{table}", view=view)
+    table = f"{header_row}\n{separator}\n{formatted_rows}"
+    logging.debug(table)
+    #await ctx.send(f"Click a button to play a video!\n```{table}```", view=view)
+    # Create and send the embed with the table
+    embed = discord.Embed(title="Search Results", description=f"Click a button to play a video!\n\n```{table}```", color=discord.Color.blurple())
+    await ctx.send(embed=embed, view=view)
 
 # Button interaction handler
 @bot.event
 async def on_interaction(interaction):
+    logging.debug(interaction)
     if interaction.type == discord.InteractionType.component:
         # Get the URL from the button's custom_id
         url = interaction.data['custom_id']
 
         # Call the preload_songs function, passing the URL
-        await preload_songs(interaction.user, url)  # Pass the URL to the play function
+        logging.debug(interaction.user)
+        logging.debug(interaction.user.voice.channel)
+        await play(interaction, url)  # Pass the URL to the play function
 
 
 async def preload_songs(ctx, youtube_url):
@@ -107,8 +121,12 @@ async def preload_songs(ctx, youtube_url):
                 #logging.debug(f'At BATCH_WAIT limit! Current length of the queue is {len(queue)}.')
                 await asyncio.sleep(60)
     else:
-        await ctx.send(f'Preloading song. Please wait for me to connect to VC.')
-        logging.info(f'Preloading song. Please wait for me to connect to VC.')
+        message = f'Preloading song. Please wait for me to connect to VC.'
+        if isinstance(ctx, discord.Interaction):
+            await ctx.response.send_message(message)
+        else:
+            await ctx.send(message)
+        logging.info(message)
         processes[0] = await asyncio.create_subprocess_exec('python', '/home/potts/git/Ribbit/preload.py', youtube_url, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout[0], stderr[0] = await processes[0].communicate()
         logging.debug(f'Preloaded output:\n{stdout[0].decode()}')
@@ -123,7 +141,11 @@ async def add_to_queue(ctx, songs):
         audio_source = discord.FFmpegPCMAudio(video_url, options='-vn', before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5')
         audio_source.read() # read the audio binary output (3-4 seconds), prevents audio from playing a little too fast in the beginning
         queue.append([title, audio_source, length])
-    await ctx.send(f'Adding {len(songs)} songs to the queue.')
+    message = f'Adding {len(songs)} songs to the queue.'
+    if isinstance(ctx, discord.Interaction):
+        await ctx.followup.send(message)
+    else:
+        await ctx.send(message)
 
 @bot.event
 async def on_ready():
@@ -146,32 +168,33 @@ async def on_voice_state_update(member, before, after):
 @bot.command(name='play', help='Play and queue YouTube links. Example: $play <YouTube URL>')
 async def play(ctx, youtube_url):
     # Check if Author is in  channel
+    author = ctx.user if isinstance(ctx, discord.Interaction) else ctx.author
     try:
-        voice_channel = ctx.author.voice.channel
+        voice_channel = author.voice.channel
     except AttributeError:
-        logging.info(f'{ctx.author} you need to be in a voice channel before using me to play audio.')
-        await ctx.send(f'{ctx.author} you need to be in a voice channel before using me to play audio.')
+        logging.info(f'{author} you need to be in a voice channel before using me to play audio.')
+        await ctx.send(f'{author} you need to be in a voice channel before using me to play audio.')
         return
 
     # Check if YouTube link
     if 'youtube' not in youtube_url:
-        logging.debug(f'Play command Author: {ctx.author}, Channel: {voice_channel}, Search: "{youtube_url}"')
-        await ctx.send(f'Searching YouTube for "{youtube_url}"...')
-        logging.info(f'Searching YouTube for "{youtube_url}"...')
+        logging.debug(f'Play command Author: {author}, Channel: {voice_channel}, Search: "{youtube_url}"')
+        await ctx.send(f'Searching YouTube for "{youtube_url}"')
+        logging.info(f'Searching YouTube for "{youtube_url}"')
 
         # Search YouTube for videos
         await search_yt(ctx, youtube_url)
         return
 
     # Grab author voice channel and print it to log
-    logging.debug(f'Play command Author: {ctx.author}, Channel: {voice_channel}, URL: {youtube_url}')
+    logging.debug(f'Play command Author: {author}, Channel: {voice_channel}, URL: {youtube_url}')
 
     #### Preload songs to queue ####
     proc = bot.loop.create_task(preload_songs(ctx, youtube_url))
     bg_tasks.append(proc)
 
     # Check if Bot is already in voice channel
-    vc = ctx.voice_client
+    vc = ctx.guild.voice_client if isinstance(ctx, discord.Interaction) else ctx.voice_client
     if not vc:
         while len(queue) == 0:
             await asyncio.sleep(1)
@@ -202,11 +225,17 @@ async def play_next(vc, ctx):
     while queue:
         title, audio_source, length = queue[0]
         vc.play(audio_source, after=lambda e: logging.error(f'Player error: {e}') if e else None)
-        await ctx.send(f"Now playing: {title}.")
+        if isinstance(ctx, discord.Interaction):
+            await ctx.followup.send(f"Now playing: {title}")
+        else:
+            await ctx.send(f"Now playing: {title}.")
         logging.info(f"Now playing: {title}.")
         while vc.is_playing() or vc.is_paused():
             await asyncio.sleep(1)
-        await ctx.send(f"Finished playing: {title}.")
+        if isinstance(ctx, discord.Interaction):
+            await ctx.followup.send(f"Finished playing: {title}.")
+        else:
+            await ctx.send(f"Finished playing: {title}.")
         logging.info(f"Finished playing: {title}.")
         try:
             queue.pop(0)
