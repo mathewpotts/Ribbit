@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import json
-from pytube import YouTube
+from pytubefix import YouTube
 import logging
 
 logging.basicConfig(filename='/home/potts/ribbit.log',
@@ -11,17 +11,17 @@ logging.basicConfig(filename='/home/potts/ribbit.log',
                     level=logging.DEBUG)
 
 # Fixes age restricted errors. Actually age restricted videos will still not work.
-from pytube.innertube import _default_clients
-_default_clients["ANDROID"]["context"]["client"]["clientVersion"] = "19.08.35"
-_default_clients["ANDROID_MUSIC"] = _default_clients["ANDROID"]
+#from pytube.innertube import _default_clients
+#_default_clients["ANDROID"]["context"]["client"]["clientVersion"] = "19.08.35"
+#_default_clients["ANDROID_MUSIC"] = _default_clients["ANDROID"]
 
 
 def preload_songs(youtube_url):
     queue = []
-    logging.info(f"In preload {youtube_url}")    
-    
+    logging.info(f"In preload {youtube_url}")
+
     try:
-        yt = YouTube(youtube_url, use_oauth=True)
+        yt = YouTube(youtube_url) #, use_oauth=True, allow_oauth_cache=True)
         title = yt.title
         length = yt.length # in seconds
         logging.debug(title)
