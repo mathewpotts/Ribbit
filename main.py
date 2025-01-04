@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 import discord
 import asyncio
 import subprocess
@@ -74,10 +74,7 @@ async def search_yt(ctx, search):
     # Send a message with the buttons
     table = f"{header_row}\n{separator}\n{formatted_rows}"
     logging.debug(table)
-    #await ctx.send(f"Click a button to play a video!\n```{table}```", view=view)
-    # Create and send the embed with the table
-    embed = discord.Embed(title="Search Results", description=f"Click a button to play a video!\n\n```{table}```", color=discord.Color.blurple())
-    await ctx.send(embed=embed, view=view)
+    await ctx.followup.send(f"Click a button to play a video!\n```{table}```", view=view)
 
 # Button interaction handler
 @bot.event
@@ -121,11 +118,11 @@ async def preload_songs(ctx, youtube_url):
                 #logging.debug(f'At BATCH_WAIT limit! Current length of the queue is {len(queue)}.')
                 await asyncio.sleep(60)
     else:
-        message = f'Preloading song. Please wait for me to connect to VC.'
+        message = f'Preloading song. Please wait.'
         if isinstance(ctx, discord.Interaction):
             await ctx.response.send_message(message)
         else:
-            await ctx.send(message)
+            await ctx.reply(message)
         logging.info(message)
         processes[0] = await asyncio.create_subprocess_exec('python', '/home/potts/git/Ribbit/preload.py', youtube_url, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout[0], stderr[0] = await processes[0].communicate()
@@ -143,13 +140,14 @@ async def add_to_queue(ctx, songs):
         queue.append([title, audio_source, length])
     message = f'Adding {len(songs)} songs to the queue.'
     if isinstance(ctx, discord.Interaction):
-        await ctx.followup.send(message)
+        await ctx.channel.send(message)
     else:
         await ctx.send(message)
 
 @bot.event
 async def on_ready():
     logging.info(f'We have logged in as {bot.user}')
+    await bot.tree.sync() # sync commands
 
 @bot.event
 async def on_voice_state_update(member, before, after):
@@ -165,10 +163,10 @@ async def on_voice_state_update(member, before, after):
         await voice_client.disconnect()
         logging.debug(f"VC disconnected due to lack of members.")
 
-@bot.command(name='play', help='Play and queue YouTube links. Example: $play <YouTube URL>')
-async def play(ctx, youtube_url):
+@bot.tree.command(name="play", description='Play YouTube links. Or search for a song!')
+async def play(ctx: discord.Interaction, youtube_url: str):
     # Check if Author is in  channel
-    author = ctx.user if isinstance(ctx, discord.Interaction) else ctx.author
+    author = ctx.user
     try:
         voice_channel = author.voice.channel
     except AttributeError:
@@ -179,7 +177,7 @@ async def play(ctx, youtube_url):
     # Check if YouTube link
     if 'youtube' not in youtube_url:
         logging.debug(f'Play command Author: {author}, Channel: {voice_channel}, Search: "{youtube_url}"')
-        await ctx.send(f'Searching YouTube for "{youtube_url}"')
+        await ctx.response.send_message(f'Searching YouTube for "{youtube_url}"')
         logging.info(f'Searching YouTube for "{youtube_url}"')
 
         # Search YouTube for videos
@@ -194,7 +192,7 @@ async def play(ctx, youtube_url):
     bg_tasks.append(proc)
 
     # Check if Bot is already in voice channel
-    vc = ctx.guild.voice_client if isinstance(ctx, discord.Interaction) else ctx.voice_client
+    vc = ctx.guild.voice_client
     if not vc:
         while len(queue) == 0:
             await asyncio.sleep(1)
@@ -205,37 +203,36 @@ async def play(ctx, youtube_url):
 
     await play_next(vc, ctx)
 
-@bot.command(name='pause', help='Pause YouTube playback.')
-async def pause(ctx):
-    if ctx.voice_client.is_playing():
-        ctx.voice_client.pause()
-        await ctx.send("Playback paused.")
+@bot.tree.command(name="pause", description='Pause YouTube playback.')
+async def pause(ctx: discord.Interaction):
+    vc = ctx.guild.voice_client
+    if vc.is_playing():
+        vc.pause()
+        await ctx.response.send_message("Playback paused.")
     else:
-        await ctx.send("Nothing is playing right now.")
+        await ctx.response.send_message("Nothing is playing right now.")
 
-@bot.command(name='resume', help='Resume YouTube playback.')
-async def resume(ctx):
-    if ctx.voice_client.is_paused():
-        ctx.voice_client.resume()
-        await ctx.send("Playback resumed.")
+@bot.tree.command(name="resume",description='Resume YouTube playback.')
+async def resume(ctx: discord.Interaction):
+    vc = ctx.guild.voice_client
+    if vc.is_paused():
+        vc.resume()
+        await ctx.response.send_message("Playback resumed.")
     else:
-        await ctx.send("Playback is not paused.")
+        await ctx.response.send_message("Playback is not paused.")
 
 async def play_next(vc, ctx):
     while queue:
         title, audio_source, length = queue[0]
         vc.play(audio_source, after=lambda e: logging.error(f'Player error: {e}') if e else None)
         if isinstance(ctx, discord.Interaction):
-            await ctx.followup.send(f"Now playing: {title}")
+            await ctx.channel.send(f"Now playing: {title}")
         else:
             await ctx.send(f"Now playing: {title}.")
         logging.info(f"Now playing: {title}.")
         while vc.is_playing() or vc.is_paused():
             await asyncio.sleep(1)
-        if isinstance(ctx, discord.Interaction):
-            await ctx.followup.send(f"Finished playing: {title}.")
-        else:
-            await ctx.send(f"Finished playing: {title}.")
+        #await ctx.channel.send(f"Finished playing: {title}.")
         logging.info(f"Finished playing: {title}.")
         try:
             queue.pop(0)
@@ -244,40 +241,41 @@ async def play_next(vc, ctx):
     await vc.disconnect()
     logging.debug('VC disconnected due to queue being empty.')
 
-@bot.command(name='queue', help='Display the current queue.') # displays links need to change to titles
-async def display_queue(ctx):
-    logging.debug(f'Queue command Author: {ctx.author}')
+@bot.tree.command(name='queue', description='Display the current queue.') # displays links need to change to titles
+async def display_queue(ctx: discord.Interaction):
+    logging.debug(f'Queue command Author: {ctx.user}')
     if queue:
-        queue_info = '\n'.join([f"Currently Playing: {tuple[0]}" if i == 0 else f"{i}. {tuple[0]}" for i, tuple in enumerate(queue)])
-        await ctx.send(f"Current Queue:\n{queue_info}")
+        upnext = '' if len(queue) <= 1 else 'Up Next: '
+        queue_info = '\n'.join([f"__**Currently Playing:**__ **{tuple[0]}**\n{upnext}" if i == 0 else f"{i}. {tuple[0]}" for i, tuple in enumerate(queue)])
+        await ctx.response.send_message(f"{queue_info}")
     else:
-        await ctx.send("The queue is empty.") # shouldn't trigger??
+        await ctx.response.send_message("The queue is empty.") # shouldn't trigger??
 
-@bot.command(name='skip', help='Skips the current audio and plays the next one in the queue.')
-async def skip(ctx):
-    logging.debug(f'Skip command Author: {ctx.author}')
-    vc = ctx.voice_client
+@bot.tree.command(name='skip', description='Skips the current audio and plays the next one in the queue.')
+async def skip(ctx: discord.Interaction):
+    logging.debug(f'Skip command Author: {ctx.user}')
+    vc = ctx.guild.voice_client
     if vc and vc.is_playing():
         vc.stop() # stop vc triggers inner while loop of play to break
-        await ctx.send(f"Skipping {queue[0][0]}.")
+        await ctx.response.send_message(f"Skipping {queue[0][0]}.")
         logging.info(f"Skipping {queue[0][0]}.")
     else:
-        await ctx.send("Nothing to skip.") # does this ever trigger??
+        await ctx.response.send_message("Nothing to skip.") 
 
-@bot.command(name='stop', help='Stops playing audio, clears the queue, and disconnects Bot from the voice channel.') # displays error but seems to work regardless
-async def stop(ctx):
+@bot.tree.command(name='stop', description='Stops playing audio, clears the queue, and disconnects Bot from the voice channel.') # displays error but seems to work regardless
+async def stop(ctx: discord.Interaction):
     ### need to find a way to kill the background tasks
-    logging.debug(f'Stop command Author: {ctx.author}')
-    vc = ctx.voice_client
+    logging.debug(f'Stop command Author: {ctx.user}')
+    vc = ctx.guild.voice_client
     if vc:
         vc.stop()
         queue.clear()
         for task in bg_tasks:
             task.cancel()
         await vc.disconnect()
-        await ctx.send("Stopped playing audio, cleared the queue, and disconnected from the voice channel.")
+        await ctx.response.send_message("Stopped playing audio, cleared the queue, and disconnected from the voice channel.")
         logging.info("Stopped playing audio, cleared the queue, and disconnected from the voice channel.")
     else:
-        await ctx.send("I'm not connected to a voice channel.")
+        await ctx.response.send_message("I'm not connected to a voice channel.")
 
 bot.run(TOKEN)
