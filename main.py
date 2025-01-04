@@ -87,7 +87,8 @@ async def on_interaction(interaction):
         # Call the preload_songs function, passing the URL
         logging.debug(interaction.user)
         logging.debug(interaction.user.voice.channel)
-        await play(interaction, url)  # Pass the URL to the play function
+        play_cmd = bot.tree.get_command('play')
+        await play_cmd.callback(interaction, url)  # Pass the URL to the play function
 
 
 async def preload_songs(ctx, youtube_url):
