@@ -120,7 +120,7 @@ async def preload_songs(ctx, youtube_url):
                         songs.append(json.loads(stdout[i].decode())[0])
                 await add_to_queue(ctx, songs)
             else:
-                #logging.debug(f'At BATCH_WAIT limit! Current length of the queue is {len(queue)}.')
+                # wait for queue to clear
                 await asyncio.sleep(60)
     else:
         message = f'Preloading song. Please wait.'
@@ -170,7 +170,7 @@ async def play(ctx: discord.Interaction, youtube_url: str):
     author = ctx.user
     try:
         voice_channel = author.voice.channel
-    except AttributeError:
+    except AttributeError: 
         logging.info(f'{author} you need to be in a voice channel before using me to play audio.')
         await ctx.channel.send(f'{author} you need to be in a voice channel before using me to play audio.')
         return
