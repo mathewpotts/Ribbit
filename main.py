@@ -143,11 +143,7 @@ async def add_to_queue(ctx, songs):
         audio_source = discord.FFmpegPCMAudio(video_url, options='-vn', before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5')
         audio_source.read() # read the audio binary output (3-4 seconds), prevents audio from playing a little too fast in the beginning
         queue.append([title, audio_source, length])
-    message = f'Adding {len(songs)} songs to the queue.'
-    if isinstance(ctx, discord.Interaction):
-        await ctx.channel.send(message)
-    else:
-        await ctx.send(message)
+    await ctx.channel.send(f'Adding {len(songs)} songs to the queue.')
 
 @bot.event
 async def on_ready():
@@ -230,10 +226,7 @@ async def play_next(vc, ctx):
     while queue:
         title, audio_source, length = queue[0]
         vc.play(audio_source, after=lambda e: logging.error(f'Player error: {e}') if e else None)
-        if isinstance(ctx, discord.Interaction):
-            await ctx.channel.send(f"Now playing: {title}")
-        else:
-            await ctx.send(f"Now playing: {title}.")
+        await ctx.channel.send(f"Now playing: {title}")
         logging.info(f"Now playing: {title}.")
         while vc.is_playing() or vc.is_paused():
             await asyncio.sleep(1)
