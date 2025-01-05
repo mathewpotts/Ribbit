@@ -57,8 +57,9 @@ async def search_yt(ctx, search):
         # For each column, find the maximum length between the header and the rows
         try:
             max_len = max(len(header[i]), max(len(row[i]) for row in rows))
-        except ValueError:
-            
+        except ValueError as e:
+            ctx.followup.send(f'YouTube had no results for "{search}"... Sorry. Try again!')
+            return
         col_widths.append(max_len)
         
     # Format the table
@@ -100,7 +101,7 @@ async def preload_songs(ctx, youtube_url):
     stdout = {}
     stderr = {}
     if 'playlist' in youtube_url:
-        await ctx.send(f'Preloading Playlist. I will add these songs to the queue {BATCH} song at a time to a total queue size of {BATCH_WAIT}. Then I will wait for more queue space to add more songs.')
+        await ctx.response.send(f'Preloading Playlist. I will add these songs to the queue {BATCH} song at a time to a total queue size of {BATCH_WAIT}. Then I will wait for more queue space to add more songs.')
         pl = list(Playlist(youtube_url))
         logging.debug(pl)
         while pl:
@@ -179,7 +180,7 @@ async def play(ctx: discord.Interaction, youtube_url: str):
         return
 
     # Check if YouTube link
-    if 'youtube' not in youtube_url:
+    if 'https://' not in youtube_url:
         logging.debug(f'Play command Author: {author}, Channel: {voice_channel}, Search: "{youtube_url}"')
         await ctx.response.send_message(f'Searching YouTube for "{youtube_url}"')
         logging.info(f'Searching YouTube for "{youtube_url}"')
