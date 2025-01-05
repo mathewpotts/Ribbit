@@ -55,7 +55,10 @@ async def search_yt(ctx, search):
     col_widths = []
     for i in range(len(header)):
         # For each column, find the maximum length between the header and the rows
-        max_len = max(len(header[i]), max(len(row[i]) for row in rows))
+        try:
+            max_len = max(len(header[i]), max(len(row[i]) for row in rows))
+        except ValueError:
+            
         col_widths.append(max_len)
         
     # Format the table
@@ -172,7 +175,7 @@ async def play(ctx: discord.Interaction, youtube_url: str):
         voice_channel = author.voice.channel
     except AttributeError:
         logging.info(f'{author} you need to be in a voice channel before using me to play audio.')
-        await ctx.send(f'{author} you need to be in a voice channel before using me to play audio.')
+        await ctx.channel.send(f'{author} you need to be in a voice channel before using me to play audio.')
         return
 
     # Check if YouTube link
