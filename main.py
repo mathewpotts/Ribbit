@@ -55,7 +55,11 @@ async def search_yt(ctx, search):
     col_widths = []
     for i in range(len(header)):
         # For each column, find the maximum length between the header and the rows
-        max_len = max(len(header[i]), max(len(row[i]) for row in rows))
+        try:
+            max_len = max(len(header[i]), max(len(row[i]) for row in rows))
+        except ValueError as e:
+            ctx.followup.send(f'YouTube had no results for "{search}"... Sorry. Try again!')
+            return
         col_widths.append(max_len)
         
     # Format the table
@@ -97,7 +101,7 @@ async def preload_songs(ctx, youtube_url):
     stdout = {}
     stderr = {}
     if 'playlist' in youtube_url:
-        await ctx.send(f'Preloading Playlist. I will add these songs to the queue {BATCH} song at a time to a total queue size of {BATCH_WAIT}. Then I will wait for more queue space to add more songs.')
+        await ctx.response.send(f'Preloading Playlist. I will add these songs to the queue {BATCH} song at a time to a total queue size of {BATCH_WAIT}. Then I will wait for more queue space to add more songs.')
         pl = list(Playlist(youtube_url))
         logging.debug(pl)
         while pl:
@@ -116,7 +120,7 @@ async def preload_songs(ctx, youtube_url):
                         songs.append(json.loads(stdout[i].decode())[0])
                 await add_to_queue(ctx, songs)
             else:
-                #logging.debug(f'At BATCH_WAIT limit! Current length of the queue is {len(queue)}.')
+                # wait for queue to clear
                 await asyncio.sleep(60)
     else:
         message = f'Preloading song. Please wait.'
@@ -139,11 +143,7 @@ async def add_to_queue(ctx, songs):
         audio_source = discord.FFmpegPCMAudio(video_url, options='-vn', before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5')
         audio_source.read() # read the audio binary output (3-4 seconds), prevents audio from playing a little too fast in the beginning
         queue.append([title, audio_source, length])
-    message = f'Adding {len(songs)} songs to the queue.'
-    if isinstance(ctx, discord.Interaction):
-        await ctx.channel.send(message)
-    else:
-        await ctx.send(message)
+    await ctx.channel.send(f'Adding {len(songs)} songs to the queue.')
 
 @bot.event
 async def on_ready():
@@ -170,13 +170,13 @@ async def play(ctx: discord.Interaction, youtube_url: str):
     author = ctx.user
     try:
         voice_channel = author.voice.channel
-    except AttributeError:
+    except AttributeError: 
         logging.info(f'{author} you need to be in a voice channel before using me to play audio.')
-        await ctx.send(f'{author} you need to be in a voice channel before using me to play audio.')
+        await ctx.channel.send(f'{author} you need to be in a voice channel before using me to play audio.')
         return
 
     # Check if YouTube link
-    if 'youtube' not in youtube_url:
+    if 'https://' not in youtube_url:
         logging.debug(f'Play command Author: {author}, Channel: {voice_channel}, Search: "{youtube_url}"')
         await ctx.response.send_message(f'Searching YouTube for "{youtube_url}"')
         logging.info(f'Searching YouTube for "{youtube_url}"')
@@ -226,10 +226,7 @@ async def play_next(vc, ctx):
     while queue:
         title, audio_source, length = queue[0]
         vc.play(audio_source, after=lambda e: logging.error(f'Player error: {e}') if e else None)
-        if isinstance(ctx, discord.Interaction):
-            await ctx.channel.send(f"Now playing: {title}")
-        else:
-            await ctx.send(f"Now playing: {title}.")
+        await ctx.channel.send(f"Now playing: {title}")
         logging.info(f"Now playing: {title}.")
         while vc.is_playing() or vc.is_paused():
             await asyncio.sleep(1)
