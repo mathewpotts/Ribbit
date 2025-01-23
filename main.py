@@ -44,6 +44,7 @@ async def search_yt(ctx, search):
     buttons = []
     for i, vid in enumerate(results[:5]):
         button = Button(label=f"{i + 1}.", style=discord.ButtonStyle.primary, custom_id=vid.watch_url)
+        vid = YouTube(vid.watch_url, use_oauth=True, allow_oauth_cache=True)
         row = (f'{i + 1}.', f'{vid.title}', f'{vid.length/60:.2f} min')
         rows.append(row)
         buttons.append(button)
@@ -178,8 +179,8 @@ async def play(ctx: discord.Interaction, youtube_url: str):
     # Check if YouTube link
     if 'https://' not in youtube_url:
         logging.debug(f'Play command Author: {author}, Channel: {voice_channel}, Search: "{youtube_url}"')
-        await ctx.response.send_message(f'Searching YouTube for "{youtube_url}"')
-        logging.info(f'Searching YouTube for "{youtube_url}"')
+        await ctx.response.send_message(f'Searching YouTube for "{youtube_url}". Please wait.')
+        logging.info(f'Searching YouTube for "{youtube_url}". Please wait.')
 
         # Search YouTube for videos
         await search_yt(ctx, youtube_url)

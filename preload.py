@@ -21,11 +21,12 @@ def preload_songs(youtube_url):
     logging.info(f"In preload {youtube_url}")
 
     try:
-        yt = YouTube(youtube_url) #, use_oauth=True, allow_oauth_cache=True)
+        yt = YouTube(youtube_url, use_oauth=True, allow_oauth_cache=True)
         title = yt.title
         length = yt.length # in seconds
         logging.debug(title)
         video_url = yt.streams.filter(progressive=True, file_extension='mp4').first().url
+        logging.debug(video_url)
         queue.append([title, video_url, length])
     except Exception as e:
         print(json.dumps({"error": str(e)}))
