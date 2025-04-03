@@ -139,8 +139,13 @@ async def preload_songs(ctx, youtube_url):
             await add_to_queue(ctx, songs)
 
 async def add_to_queue(ctx, songs):
+    # Check if Bot is already in voice channel
+    logging.info("In the add_to_queue function.")
+        
     for song in songs:
+        logging.debug(song)
         title, video_url, length = song
+        logging.debug('Starting discord.FFmpegPCMAudio...')
         audio_source = discord.FFmpegPCMAudio(video_url, options='-vn', before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5')
         audio_source.read() # read the audio binary output (3-4 seconds), prevents audio from playing a little too fast in the beginning
         queue.append([title, audio_source, length])
